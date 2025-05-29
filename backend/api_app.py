@@ -248,14 +248,14 @@ def owner_or_admin_api_required(item_type='batch'):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            if 'username' not in session:
-                app.logger.warning(f"API: Unauthorized access attempt to {request.path} for {item_type} (no session).")
-                return jsonify(success=False, message="Authentication required."), 401
             
             # Allow CORS preflight (OPTIONS) requests to bypass full authentication logic
             if request.method == 'OPTIONS':
                 app.logger.info(f"API: CORS Preflight (OPTIONS) request to {request.path} for {item_type} bypassed auth.")
                 return '', 204
+            if 'username' not in session:
+                app.logger.warning(f"API: Unauthorized access attempt to {request.path} for {item_type} (no session).")
+                return jsonify(success=False, message="Authentication required."), 401
 
             if not redis_client:
                 app.logger.error(f"API: DB service unavailable for {item_type} access check.")
@@ -314,13 +314,13 @@ def owner_or_admin_access_required_api(item_type='batch'):
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            if request.method == 'OPTIONS':
+                app.logger.info(f"API: CORS Preflight (OPTIONS) request to {request.path} for {item_type} bypassed auth.")
+                return '', 204 # Return a 204 No Content for successful preflight
+
             if 'username' not in session:
-                app.logger.warning(f"API: Owner/Admin access attempt without login on {request.path}.")
+                app.logger.warning(f"API: Unauthorized access attempt to {request.path} for {item_type} (no session).")
                 return jsonify(success=False, message="Authentication required."), 401
-            
-            if not redis_client:
-                app.logger.error(f"API: Owner/Admin access check failed - Redis unavailable.")
-                return jsonify(success=False, message="Database service temporarily unavailable."), 503
 
             item_id_key_in_kwargs = f'{item_type}_id'
             item_id_to_check = kwargs.get(item_id_key_in_kwargs)
