@@ -40,7 +40,8 @@ app.config['SESSION_COOKIE_SECURE'] = False # Set to True in production for HTTP
 # Then append 'newvid', 'static', 'uploads' to get /home/www/newvid/static/uploads
 _backend_base_dir = os.path.dirname(os.path.abspath(__file__)) # /home/www/froogle/backend
 _www_dir = os.path.abspath(os.path.join(_backend_base_dir, '..', '..')) # /home/www
-NEWVID_UPLOAD_PATH_ABS = os.path.join(_www_dir, 'newvid', 'static', 'uploads')
+NEWVID_UPLOAD_PATH_ABS = os.path.join(_backend_base_dir, 'static', 'uploads') # <--- CHANGE THIS LINE
+
 
 app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER', NEWVID_UPLOAD_PATH_ABS)
 app.logger.info(f"Configured UPLOAD_FOLDER (absolute path): {app.config['UPLOAD_FOLDER']}") # Add this for clear logging
@@ -906,8 +907,8 @@ def api_get_batch_details(batch_id, batch_data):
             # Construct URLs for frontend use
             if media_item['filepath'] and media_item['processing_status'] == 'completed':
                 # This URL points to the Flask API endpoint that serves the actual file content
-                media_item['web_url'] = url_for('api_download_media_item', media_id=mid, _external=False)
-                media_item['download_url'] = url_for('api_download_media_item', media_id=mid, _external=False) # Can be same or different if you want distinct download behavior
+                media_item['web_url'] = url_for('api_download_media_item', media_id=mid, _external=True)
+                media_item['download_url'] = url_for('api_download_media_item', media_id=mid, _external=True) # Can be same or different if you want distinct download behavior
             else:
                 media_item['download_url'] = None
                 media_item['web_url'] = None # Will be null if file not ready or not found
