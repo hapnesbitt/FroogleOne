@@ -1,7 +1,7 @@
 # /home/www/froogle/api_app.py
 # Version: Medium V2.6 - Fix Redis and Flask app.env issues
 
-from flask import Flask, jsonify, request, session, current_app, abort
+from flask import Flask, jsonify, request, session, url_for, send_file, current_app, abort
 from flask_cors import CORS
 import os
 import redis
@@ -32,7 +32,21 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_SECURE'] = False # Set to True in production for HTTPS
 
-app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER', 'static/uploads') # Relative to app.root_path
+
+# --- NEW UPLOAD_FOLDER CONFIGURATION ---
+# __file__ in api_app.py is: /home/www/froogle/backend/api_app.py
+# os.path.dirname(os.path.abspath(__file__)) gives: /home/www/froogle/backend
+# os.path.join(..., '..', '..') goes up two levels to: /home/www/
+# Then append 'newvid', 'static', 'uploads' to get /home/www/newvid/static/uploads
+_backend_base_dir = os.path.dirname(os.path.abspath(__file__)) # /home/www/froogle/backend
+_www_dir = os.path.abspath(os.path.join(_backend_base_dir, '..', '..')) # /home/www
+NEWVID_UPLOAD_PATH_ABS = os.path.join(_www_dir, 'newvid', 'static', 'uploads')
+
+app.config['UPLOAD_FOLDER'] = os.environ.get('UPLOAD_FOLDER', NEWVID_UPLOAD_PATH_ABS)
+app.logger.info(f"Configured UPLOAD_FOLDER (absolute path): {app.config['UPLOAD_FOLDER']}") # Add this for clear logging
+# --- END NEW UPLOAD_FOLDER CONFIGURATION ---
+
+
 app.config['MAX_CONTENT_LENGTH'] = int(os.environ.get('MAX_CONTENT_LENGTH', 9000 * 1024 * 1024)) # 9GB
 app.config['FFMPEG_PATH'] = os.environ.get('FFMPEG_PATH', 'ffmpeg')
 
@@ -229,6 +243,60 @@ def login_required_api(f):
             return jsonify(success=False, message="Authentication required. Please log in."), 401
         return f(*args, **kwargs)
     return decorated_function
+
+def owner_or_admin_api_required(item_type='batch'):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'username' not in session:
+                app.logger.warning(f"API: Unauthorized access attempt to {request.path} for {item_type} (no session).")
+                return jsonify(success=False, message="Authentication required."), 401
+            
+            # Allow CORS preflight (OPTIONS) requests to bypass full authentication logic
+            if request.method == 'OPTIONS':
+                app.logger.info(f"API: CORS Preflight (OPTIONS) request to {request.path} for {item_type} bypassed auth.")
+                return '', 204
+
+            if not redis_client:
+                app.logger.error(f"API: DB service unavailable for {item_type} access check.")
+                return jsonify(success=False, message="Database service temporarily unavailable."), 503
+
+            item_id_key_in_kwargs = f'{item_type}_id' # e.g., 'batch_id' or 'media_id'
+            item_id_to_check = kwargs.get(item_id_key_in_kwargs)
+
+            if not item_id_to_check:
+                app.logger.error(f"API: Ownership check for {item_type}: No ID provided in kwargs: {kwargs}")
+                return jsonify(success=False, message=f"Cannot verify ownership: {item_type.capitalize()} ID missing."), 400
+
+            item_id_to_check_str = str(item_id_to_check)
+            item_data_key = f'{item_type}:{item_id_to_check_str}'
+            
+            try:
+                item_data = redis_client.hgetall(item_data_key)
+            except redis.exceptions.RedisError as e:
+                app.logger.error(f"API: Redis error fetching '{item_data_key}': {e}")
+                return jsonify(success=False, message="Database error during ownership check."), 500
+
+            if not item_data:
+                app.logger.warning(f"API: {item_type.capitalize()} '{item_id_to_check_str}' not found.")
+                return jsonify(success=False, message=f"{item_type.capitalize()} not found."), 404
+
+            owner_field = 'uploader_user_id' if item_type == 'media' else 'user_id'
+            item_owner = item_data.get(owner_field)
+
+            if not item_owner:
+                app.logger.error(f"API: Ownership check: Owner field '{owner_field}' missing for {item_data_key}.")
+                return jsonify(success=False, message=f"Cannot verify ownership: {item_type.capitalize()} data inconsistent."), 500
+
+            if item_owner != session['username'] and not session.get('is_admin'):
+                app.logger.warning(f"API: User '{session['username']}' attempted unauthorized access to {item_type} '{item_id_to_check_str}'.")
+                return jsonify(success=False, message=f"No permission for this {item_type}."), 403
+            
+            # Pass item_data to the decorated function for convenience
+            kwargs[f'{item_type}_data'] = item_data
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
 
 def admin_required_api(f):
     @wraps(f)
@@ -786,89 +854,112 @@ def api_create_batch():
         app.logger.error(f"API: POST /batches - Unexpected error for user '{current_username}' creating batch: {e}", exc_info=True)
         return jsonify(success=False, message="An unexpected server error occurred while creating Lightbox."), 500
 
-# --- Get Batch Details (from newvid/app.py -> collection_view) ---
+# ... (End of your api_create_batch function, should be at line 856) ...
+
 @app.route(f'{API_PREFIX}/batches/<uuid:batch_id>', methods=['GET', 'OPTIONS'])
-@login_required_api
-@owner_or_admin_access_required_api(item_type='batch')
-def api_get_batch_details(batch_id, batch_data): # batch_data is injected by decorator
-    if request.method == 'OPTIONS': return '', 204
+@owner_or_admin_api_required(item_type='batch')
+def api_get_batch_details(batch_id, batch_data):
+    # OPTIONS request is handled by the decorator, but explicit check is fine.
+    if request.method == 'OPTIONS':
+        return '', 204
 
     if not redis_client:
-        app.logger.error(f"API: GET /batches/{batch_id} - Redis client not available.")
-        return jsonify(success=False, message="Service unavailable to retrieve Lightbox details."), 503
+        app.logger.error("API: Database service unavailable for fetching batch details.")
+        return jsonify(success=False, message="Database service temporarily unavailable."), 503
 
-    try:
-        batch_id_str = str(batch_id)
-        
-        # Convert necessary fields to appropriate types for JSON
-        batch_info = {k: v for k, v in batch_data.items()} # Create mutable copy
-        batch_info['id'] = batch_id_str
-        batch_info['is_shared'] = batch_info.get('is_shared', '0') == '1'
-        if 'creation_timestamp' in batch_info:
-            batch_info['creation_timestamp'] = float(batch_info['creation_timestamp'])
-        if 'last_modified_timestamp' in batch_info:
-            batch_info['last_modified_timestamp'] = float(batch_info['last_modified_timestamp'])
+    batch_id_str = str(batch_id)
+    batch_info_raw = batch_data # Data already fetched and validated by decorator
 
-        # Generate public share URL if applicable
-        if batch_info['is_shared'] and batch_info.get('share_token'):
-            # In a real API, the public URL might be constructed by the frontend
-            # based on a base URL, or the backend provides the full URL.
-            # For now, we'll provide the path to construct on frontend.
-            batch_info['public_share_path'] = f'/public/batch/{batch_info["share_token"]}'
-            
-        media_ids = redis_client.lrange(f'batch:{batch_id_str}:media_ids', 0, -1)
-        media_list = []; valid_slideshow_media = 0; any_processing = False
+    # Convert raw Redis hash to a more suitable JSON structure
+    batch_info = {
+        'id': batch_id_str,
+        'name': batch_info_raw.get('name'),
+        'user_id': batch_info_raw.get('user_id'),
+        'creation_timestamp': float(batch_info_raw.get('creation_timestamp', 0)),
+        'last_modified_timestamp': float(batch_info_raw.get('last_modified_timestamp', 0)) if batch_info_raw.get('last_modified_timestamp') else 0,
+        'is_shared': batch_info_raw.get('is_shared') == '1',
+        'share_token': batch_info_raw.get('share_token')
+    }
 
-        for mid in media_ids:
-            mdata = redis_client.hgetall(f'media:{mid}')
-            if mdata:
-                mdata['id'] = mid
-                mdata['processing_status'] = mdata.get('processing_status', 'completed')
-                mdata['error_message'] = mdata.get('error_message', '')
-                mdata['item_type'] = mdata.get('item_type', 'media')
-                
-                if mdata['processing_status'] not in ['completed', 'failed', 'completed_import', 'failed_import']:
-                    any_processing = True
-                
-                # Convert boolean-like strings to actual booleans
-                mdata['is_hidden'] = mdata.get('is_hidden', '0') == '1'
-                mdata['is_liked'] = mdata.get('is_liked', '0') == '1'
-                if 'upload_timestamp' in mdata:
-                    mdata['upload_timestamp'] = float(mdata['upload_timestamp'])
+    media_ids = redis_client.lrange(f'batch:{batch_id_str}:media_ids', 0, -1)
+    media_list = []
+    for mid in media_ids:
+        mdata_raw = redis_client.hgetall(f'media:{mid}')
+        if mdata_raw:
+            # Prepare media data for JSON response
+            media_item = {
+                'id': mid,
+                'original_filename': mdata_raw.get('original_filename'),
+                'filename_on_disk': mdata_raw.get('filename_on_disk'),
+                'filepath': mdata_raw.get('filepath'), # Relative path like user/batch_id/filename.ext
+                'mimetype': mdata_raw.get('mimetype'),
+                'is_hidden': mdata_raw.get('is_hidden', '0') == '1',
+                'is_liked': mdata_raw.get('is_liked', '0') == '1',
+                'uploader_user_id': mdata_raw.get('uploader_user_id'),
+                'batch_id': mdata_raw.get('batch_id'),
+                'upload_timestamp': float(mdata_raw.get('upload_timestamp', 0)),
+                'description': mdata_raw.get('description'),
+                'item_type': mdata_raw.get('item_type', 'media'),
+                'processing_status': mdata_raw.get('processing_status', 'completed')
+            }
 
-                rpath = mdata.get('filepath')
-                if rpath:
-                    # Frontend will construct the full URL to static files
-                    mdata['web_path_segment'] = f"static/uploads/{rpath.lstrip('/')}"
-                    mdata['download_path_segment'] = f"{API_PREFIX}/media/{mid}/download" # Correct API path
-                else:
-                    mdata['web_path_segment'] = None
-                    mdata['download_path_segment'] = None
-
-                media_list.append(mdata)
-                
-                if mdata['item_type'] == 'media' and mdata['processing_status'] == 'completed' and not mdata['is_hidden']:
-                    valid_slideshow_media += 1
+            # Construct URLs for frontend use
+            if media_item['filepath'] and media_item['processing_status'] == 'completed':
+                # This URL points to the Flask API endpoint that serves the actual file content
+                media_item['web_url'] = url_for('api_download_media_item', media_id=mid, _external=False)
+                media_item['download_url'] = url_for('api_download_media_item', media_id=mid, _external=False) # Can be same or different if you want distinct download behavior
             else:
-                app.logger.warning(f"API: Media ID {mid} in batch {batch_id_str} but no data in Redis.")
-        
-        batch_info['valid_media_for_slideshow_count'] = valid_slideshow_media
-        batch_info['total_items_count'] = len(media_ids)
+                media_item['download_url'] = None
+                media_item['web_url'] = None # Will be null if file not ready or not found
+            media_list.append(media_item)
+        else:
+            app.logger.warning(f"API: Media ID {mid} in batch {batch_id_str} but no data in Redis.")
 
-        app.logger.info(f"API: GET /batches/{batch_id} - User '{session['username']}' retrieved Lightbox '{batch_info.get('name')}' with {len(media_list)} items.")
-        return jsonify(
-            success=True,
-            batch=batch_info,
-            media_items=media_list,
-            is_any_item_processing=any_processing
-        ), 200
+    batch_info['media_items'] = media_list
+    batch_info['item_count'] = len(media_list) # Actual count of items with data
 
-    except redis.exceptions.RedisError as e:
-        app.logger.error(f"API: GET /batches/{batch_id} - Redis error: {e}", exc_info=True)
-        return jsonify(success=False, message="Error retrieving Lightbox details from database."), 500
+    app.logger.info(f"API: User '{session['username']}' fetched details for batch '{batch_id_str}'.")
+    return jsonify(success=True, batch=batch_info), 200
+
+# ... (End of your api_get_batch_details function, likely around line 900s, depending on where it ended in the grep output) ...
+
+@app.route(f'{API_PREFIX}/media/<uuid:media_id>/download', methods=['GET', 'OPTIONS'])
+@owner_or_admin_api_required(item_type='media') # Uses the media type for ownership check
+def api_download_media_item(media_id, media_data):
+    if request.method == 'OPTIONS':
+        return '', 204 # Handled by the decorator
+
+    if not redis_client:
+        app.logger.error("API: Database service unavailable for media download.")
+        return jsonify(success=False, message="Database service temporarily unavailable."), 503
+
+    # media_data already fetched and validated by decorator for ownership
+    rpath = media_data.get('filepath') # e.g., 'ross/batch_id/image.jpg'
+    orig_fname = media_data.get('original_filename', f"download_{media_id}.bin")
+    mime = media_data.get('mimetype', 'application/octet-stream')
+
+    if not rpath:
+        app.logger.error(f"API: Download media {media_id} failed: No 'filepath' in Redis for this media item.")
+        return jsonify(success=False, message="File information missing for this item."), 404
+
+    # Construct the absolute disk path using the configured UPLOAD_FOLDER
+    # app.config['UPLOAD_FOLDER'] is now the absolute path to /home/www/newvid/static/uploads
+    full_disk_path = os.path.join(app.config['UPLOAD_FOLDER'], rpath)
+
+    if not os.path.isfile(full_disk_path):
+        app.logger.error(f"API: Download media {media_id} (path: {full_disk_path}) failed: File not found on server disk.")
+        return jsonify(success=False, message="File not found on server."), 404
+
+    app.logger.info(f"API: User '{session['username']}' serving/downloading '{orig_fname}' (ID: {media_id}) from path: {full_disk_path}.")
+    try:
+        # send_file requires an absolute path.
+        # as_attachment=False means the browser will try to display it if it can (e.g., image, video)
+        # as_attachment=True means it will force a download. For now, we'll set it to False
+        # so media can be viewed directly.
+        return send_file(full_disk_path, mimetype=mime, as_attachment=False, download_name=orig_fname)
     except Exception as e:
-        app.logger.error(f"API: GET /batches/{batch_id} - Unexpected error: {e}", exc_info=True)
-        return jsonify(success=False, message="An unexpected server error occurred while retrieving Lightbox details."), 500
+        app.logger.error(f"API: Error serving file {full_disk_path}: {e}", exc_info=True)
+        return jsonify(success=False, message="Error preparing file for download/display."), 500
 
 # --- Upload Media (from newvid/app.py -> upload) ---
 @app.route(f'{API_PREFIX}/upload', methods=['POST', 'OPTIONS'])
@@ -1694,4 +1785,3 @@ if __name__ == '__main__':
     
     host = os.environ.get('FLASK_RUN_HOST','0.0.0.0'); port = int(os.environ.get('FLASK_RUN_PORT',5005))
     app.run(debug=app.debug, host=host, port=port)
-
