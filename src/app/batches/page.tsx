@@ -1,18 +1,18 @@
 // /home/www/froogle/src/app/batches/page.tsx
-'use client'; // This component will run on the client-side
+'use client'; 
 
 import { useEffect, useState, FormEvent } from 'react';
 import Link from 'next/link';
 import {
   getAuthStatus,
-  login,
+  login, 
   logout,
   getBatches,
   createBatch,
-  ApiResponse,
-  Batch,
+  ApiResponse, 
+  Batch, 
   UserSession,
-} from '../../services/api'; // Corrected path for this file's location
+} from '../../services/api'; // <-- CORRECTED PATH HERE (removed one ../)
 
 export default function BatchesOverviewPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
@@ -28,10 +28,10 @@ export default function BatchesOverviewPage() {
   useEffect(() => {
     const checkAuth = async () => {
       setAuthLoading(true);
-      const response = await getAuthStatus();
-      if (response.success && response.data) {
-        setIsLoggedIn(response.data.isLoggedIn);
-        setCurrentUser(response.data.user);
+      const response = await getAuthStatus(); 
+      if (response.success && response.isLoggedIn !== undefined) { 
+        setIsLoggedIn(response.isLoggedIn); 
+        setCurrentUser(response.user || null); 
       } else {
         setIsLoggedIn(false);
         setCurrentUser(null);
@@ -46,7 +46,6 @@ export default function BatchesOverviewPage() {
   useEffect(() => {
     if (!isLoggedIn) {
       if (!authLoading) {
-        // If not logged in and auth check is complete, set loading to false for batches
         setLoading(false);
       }
       return;
@@ -55,9 +54,9 @@ export default function BatchesOverviewPage() {
     const fetchBatches = async () => {
       setLoading(true);
       setError(null);
-      const response: ApiResponse<{ batches: Batch[] }> = await getBatches();
-      if (response.success && response.data) {
-        setBatches(response.data.batches);
+      const response = await getBatches(); 
+      if (response.success && response.batches) { 
+        setBatches(response.batches); 
       } else {
         setError(response.message || 'Failed to load batches.');
         setBatches([]);
@@ -66,7 +65,7 @@ export default function BatchesOverviewPage() {
     };
 
     fetchBatches();
-  }, [isLoggedIn, authLoading]); // Re-fetch when login status changes
+  }, [isLoggedIn, authLoading]); 
 
   // --- Handlers ---
   const handleCreateBatch = async (e: FormEvent) => {
@@ -78,12 +77,11 @@ export default function BatchesOverviewPage() {
 
     setCreatingBatch(true);
     setError(null);
-    const response: ApiResponse<{ batch: Batch }> = await createBatch(newBatchName.trim());
-    if (response.success && response.data) {
-      setNewBatchName(''); // Clear input
-      // Add the new batch to the list and sort by creation timestamp (newest first)
+    const response = await createBatch(newBatchName.trim()); 
+    if (response.success && response.batch) { 
+      setNewBatchName(''); 
       setBatches(prevBatches =>
-        [...prevBatches, response.data!.batch].sort((a, b) => (b.creation_timestamp || 0) - (a.creation_timestamp || 0))
+        [...prevBatches, response.batch!].sort((a, b) => (b.creation_timestamp || 0) - (a.creation_timestamp || 0)) 
       );
     } else {
       setError(response.message || 'Failed to create Lightbox.');
@@ -93,11 +91,11 @@ export default function BatchesOverviewPage() {
 
   const handleTestLogin = async () => {
     setError(null);
-    const response = await login('ross', 'password'); // Use your test user credentials
+    const response = await login('ross', 'password'); 
     if (response.success) {
-      alert('Logged in as ross! Refreshing batches...');
-      setIsLoggedIn(true); // Trigger useEffect to refetch
-      setCurrentUser(response.data?.user || null);
+      alert('Logged in as ross!');
+      setIsLoggedIn(true); 
+      setCurrentUser(response.user || null); 
     } else {
       setError(response.message || 'Login failed.');
     }
@@ -105,12 +103,12 @@ export default function BatchesOverviewPage() {
 
   const handleLogout = async () => {
     setError(null);
-    const response = await logout();
+    const response = await logout(); 
     if (response.success) {
       alert('Logged out.');
       setIsLoggedIn(false);
       setCurrentUser(null);
-      setBatches([]); // Clear batches
+      setBatches([]); 
     } else {
       setError(response.message || 'Logout failed.');
     }
@@ -118,14 +116,18 @@ export default function BatchesOverviewPage() {
 
   // --- Render Logic ---
   if (authLoading) {
-    return <div className="p-4">Checking authentication status...</div>;
+    return (
+        <div className="p-8 text-center text-xl font-semibold text-gray-700">
+            <p>Checking authentication status...</p>
+        </div>
+    );
   }
 
   if (!isLoggedIn) {
     return (
-      <div className="p-4 flex flex-col items-center justify-center min-h-screen-centered bg-gray-50">
-        <div className="bg-white p-8 rounded shadow-md w-full max-w-sm">
-          <h1 className="text-2xl font-bold mb-4 text-center">Login Required</h1>
+      <div className="flex items-center justify-center min-h-screen-centered bg-gray-100 p-4">
+        <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm border border-gray-200">
+          <h1 className="text-3xl font-bold mb-4 text-center text-gray-800">Login Required</h1>
           <p className="mb-4 text-gray-700 text-center">
             You need to be logged in to view your Lightboxes.
           </p>
@@ -137,27 +139,33 @@ export default function BatchesOverviewPage() {
           </p>
           <button
             onClick={handleTestLogin}
-            className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-200 ease-in-out disabled:opacity-50"
             disabled={loading || creatingBatch}
           >
             Login as Ross (Test)
           </button>
+          <p className="text-center text-gray-600 text-sm mt-4">
+              Don't have an account?{' '}
+              <Link href="/register" className="font-semibold text-blue-600 hover:text-blue-800">
+                Register here
+              </Link>
+            </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Your Lightboxes</h1>
-        <div className="text-right">
+    <div className="container mx-auto p-4 md:p-8">
+      <div className="flex flex-col md:flex-row justify-between items-center mb-6 border-b pb-4 border-gray-300">
+        <h1 className="text-3xl font-extrabold text-gray-900">Your Lightboxes</h1>
+        <div className="text-right mt-4 md:mt-0">
           {currentUser && (
-            <p className="text-lg">Logged in as: <span className="font-semibold">{currentUser.username}</span></p>
+            <p className="text-lg text-gray-700">Logged in as: <span className="font-semibold">{currentUser.username}</span></p>
           )}
           <button
             onClick={handleLogout}
-            className="mt-2 bg-red-500 hover:bg-red-600 text-white text-sm font-bold py-1 px-3 rounded focus:outline-none focus:shadow-outline"
+            className="mt-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-2 px-4 rounded-md focus:outline-none focus:shadow-outline transition duration-200"
           >
             Logout
           </button>
@@ -165,49 +173,50 @@ export default function BatchesOverviewPage() {
       </div>
 
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-md relative mb-6" role="alert">
           <strong className="font-bold">Error:</strong>
           <span className="block sm:inline"> {error}</span>
         </div>
       )}
 
       {/* Create New Batch Form */}
-      <div className="mb-8 p-4 border rounded-lg shadow-sm bg-white">
-        <h2 className="text-xl font-semibold mb-3">Create New Lightbox</h2>
-        <form onSubmit={handleCreateBatch} className="flex gap-2">
+      <div className="bg-white p-6 rounded-lg shadow-md mb-8 border border-gray-200">
+        <h2 className="text-xl font-semibold text-gray-800 mb-4">Create New Lightbox</h2>
+        <form onSubmit={handleCreateBatch} className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
-            placeholder="New Lightbox Name"
+            placeholder="Enter Lightbox name"
             value={newBatchName}
             onChange={(e) => setNewBatchName(e.target.value)}
-            className="flex-grow p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-grow p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={creatingBatch}
             maxLength={255}
+            required
           />
           <button
             type="submit"
-            className="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline disabled:opacity-50"
+            className="px-5 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 focus:outline-none focus:shadow-outline disabled:opacity-50 transition-colors"
             disabled={creatingBatch || !newBatchName.trim()}
           >
-            {creatingBatch ? 'Creating...' : 'Create'}
+            {creatingBatch ? 'Creating...' : 'Create Lightbox'}
           </button>
         </form>
       </div>
 
       {/* List of Batches */}
-      <h2 className="text-xl font-semibold mb-3">Your Existing Lightboxes</h2>
+      <h2 className="text-xl font-semibold text-gray-800 mb-4">Your Existing Lightboxes ({batches.length})</h2>
       {loading ? (
-        <p>Loading your Lightboxes...</p>
+        <p className="text-gray-600">Loading your Lightboxes...</p>
       ) : batches.length === 0 ? (
-        <p>You don't have any Lightboxes yet. Create one above!</p>
+        <p className="text-gray-600">You don't have any Lightboxes yet. Create one above!</p>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {batches.map((batch) => (
-            <div key={batch.id} className="border p-4 rounded-lg shadow-md bg-white hover:shadow-lg transition-shadow duration-200">
-              <Link href={`/batches/${batch.id}`} className="block">
-                <h3 className="text-lg font-bold text-blue-700 hover:underline mb-2">{batch.name}</h3>
+            <div key={batch.id} className="border border-gray-200 p-5 rounded-lg shadow-md bg-white hover:shadow-lg transition-shadow duration-200 flex flex-col justify-between">
+              <Link href={`/batches/${batch.id}`} className="block mb-3">
+                <h3 className="text-xl font-bold text-blue-700 hover:text-blue-800 break-words mb-2">{batch.name}</h3>
                 <p className="text-sm text-gray-600">Items: {batch.item_count}</p>
-                <p className="text-sm text-gray-600">Shared: {batch.is_shared ? 'Yes' : 'No'}</p>
+                <p className="text-sm text-gray-600">Shared: <span className={`${batch.is_shared ? 'text-green-600' : 'text-red-600'}`}>{batch.is_shared ? 'Yes' : 'No'}</span></p>
                 <p className="text-xs text-gray-500 mt-2">
                   Created: {new Date(batch.creation_timestamp * 1000).toLocaleString()}
                 </p>
@@ -215,6 +224,16 @@ export default function BatchesOverviewPage() {
                   Last Modified: {new Date(batch.last_modified_timestamp * 1000).toLocaleString()}
                 </p>
               </Link>
+              {/* Authenticated Slideshow Link for the Owner */}
+              {batch.playable_media_count !== undefined && batch.playable_media_count > 0 && (
+                <Link 
+                  href={`/slideshow/view/${batch.id}`} 
+                  className="mt-3 px-4 py-2 bg-blue-600 text-white font-semibold rounded-md text-center hover:bg-blue-700 transition-colors inline-flex items-center justify-center space-x-2"
+                >
+                  <span>Play My Slideshow</span>
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd"></path></svg>
+                </Link>
+              )}
             </div>
           ))}
         </div>

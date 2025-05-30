@@ -1,27 +1,34 @@
-// src/services/api.ts
+// /home/www/froogle/src/services/api.ts
+// Updated to fix API response parsing and ensure correct data access.
 
 // --- Configuration ---
 // Make sure to set this in your .env.local file in your Next.js project
-// e.g., NEXT_PUBLIC_API_BASE_URL=http://localhost:5005/api/v1
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5005/api/v1';
+// e.g., NEXT_PUBLIC_FLASK_API_BASE_URL=http://localhost:5005
+const API_BASE_URL_ROOT = process.env.NEXT_PUBLIC_FLASK_API_BASE_URL || 'http://localhost:5005';
+const API_PREFIX = '/api/v1'; // This is hardcoded to match your Flask backend's API_PREFIX
+
+// Helper function to construct full API URLs
+const constructFullApiUrl = (path: string) => `${API_BASE_URL_ROOT}${API_PREFIX}${path}`;
 
 // --- Interfaces for API Data Structures ---
 
-// Represents a user session status
 export interface UserSession {
   username: string;
   isAdmin: boolean;
 }
 
-export const url_for_api_base = API_BASE_URL; // Export the base URL directly
-
 // Common API response structure
+// T is now ONLY the top-level part of the response object, excluding 'success' and 'message'.
+// Example: if Flask returns {success: true, batch: {...}}, then T is { batch: Batch }
+// The ApiResponse wrapper then adds success/message/error around it.
 export interface ApiResponse<T = any> {
   success: boolean;
-  message: string;
-  data?: T;
-  error?: string; // For explicit error messages from API error handlers
-  // Add other common fields if your API always returns them
+  message?: string; // General success or error message
+  error?: string; // More specific error type/code
+  // ALL specific data fields from Flask's JSON response will now be directly
+  // part of the T type.
+  // The 'data' field is removed from this generic interface, as we now expect specific keys.
+  // The consumer will assert (T as YourExpectedType).yourKey
 }
 
 // Interface for a single Media Item
@@ -39,12 +46,13 @@ export interface MediaItem {
   description: string;
   item_type: 'media' | 'blob' | 'archive_import'; // 'media' for transcodable, 'blob' for direct, 'archive_import' for zip files
   processing_status: 'queued' | 'completed' | 'failed' | 'queued_import' | 'completed_import' | 'failed_import';
+  error_message?: string; // From Flask for failed processing
   
-  // URLs provided by the backend for frontend consumption
-  web_url?: string;       // For display (e.g., <img> src, <video> src)
-  download_url?: string;  // For explicit download links
-  web_path_segment?: string; // For public views, relative to static/uploads
-  public_download_path_segment?: string; // For public blob downloads
+  // URLs provided by the backend for frontend consumption (new, direct URLs)
+  web_url?: string;       // Authenticated display (e.g., <img> src, <video> src)
+  download_url?: string;  // Authenticated explicit download links
+  public_display_url?: string; // Public display URL for images/videos/audio
+  public_download_url?: string; // Public explicit download links for any file type
 }
 
 // Interface for a single Batch (Lightbox)
@@ -55,9 +63,14 @@ export interface Batch {
   creation_timestamp: number; // Unix timestamp (float)
   last_modified_timestamp: number; // Unix timestamp (float)
   is_shared: boolean; // Converted from '0'/'1' to boolean
-  share_token?: string; // Only present if shared
-  item_count: number; // Number of media items in the batch
+  share_token?: string | null; // Null if not shared
+  item_count?: number; // Number of media items in the batch (total, including processing/hidden)
+  playable_media_count?: number; // Count of media items ready for slideshow (completed, not hidden, suitable type)
   media_items?: MediaItem[]; // Only included when fetching a single batch's details
+  
+  // URLs for sharing a batch (provided by Flask API when shared)
+  public_share_url?: string; // Full URL to public batch gallery view
+  public_slideshow_url?: string; // Full URL to public slideshow view
 }
 
 // Interface for Uploaded Item Meta (from /api/v1/upload response)
@@ -71,211 +84,176 @@ export interface UploadedItemMeta {
 // --- API Client Functions ---
 
 // Helper for consistent fetch requests
+// T is now the type of the _entire successful response body_ (excluding success/message/error).
+// Example: For getBatchDetails, Flask returns {success: true, batch: Batch}. So T here will be { batch: Batch }.
+// apiFetch will return { success: true, batch: Batch } if successful.
 async function apiFetch<T>(
   endpoint: string,
   options?: RequestInit
-): Promise<ApiResponse<T>> {
-  const url = `${API_BASE_URL}${endpoint}`;
+): Promise<ApiResponse & T> { // ApiResponse & T combines the common ApiResponse fields with the specific T fields
+  const url = constructFullApiUrl(endpoint);
   try {
     const response = await fetch(url, {
       ...options,
       credentials: 'include', // Important for sending/receiving session cookies
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': options?.body instanceof FormData ? undefined : 'application/json', // Let FormData set its own Content-Type
         ...options?.headers,
       },
     });
 
-    if (!response.ok) {
-      // Attempt to parse JSON error message if available
-      const errorData = await response.json().catch(() => ({}));
-      const errorMessage = errorData.message || response.statusText || 'Unknown API error';
-      console.error(`API Error: ${response.status} ${errorMessage}`, errorData);
-      return { success: false, message: errorMessage, error: errorData.error };
-    }
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : {}; // data is the raw Flask response JSON
 
-    const data = await response.json();
-    return { success: true, message: data.message || 'Success', data: data };
+    if (!response.ok) {
+      const errorMessage = data.message || response.statusText || 'Unknown API error';
+      console.error(`API Error (${response.status}): ${errorMessage}`, data);
+      return { success: false, message: errorMessage, error: data.error || response.statusText } as ApiResponse & T;
+    }
+    // For successful responses, Flask's API returns { success: true, key1: val1, key2: val2 }
+    // We combine the common ApiResponse fields (success, message) with the rest of the data.
+    return { success: true, ...data } as ApiResponse & T;
   } catch (error: any) {
     console.error(`Network or unexpected error fetching ${url}:`, error);
-    return { success: false, message: error.message || 'Network error occurred.' };
+    return { success: false, message: error.message || 'Network error occurred.' } as ApiResponse & T;
   }
 }
-
-// Helper for file uploads (uses FormData)
-async function apiUploadFetch<T>(
-  endpoint: string,
-  formData: FormData,
-  options?: RequestInit
-): Promise<ApiResponse<T>> {
-  const url = `${API_BASE_URL}${endpoint}`;
-  try {
-    const response = await fetch(url, {
-      ...options,
-      method: 'POST',
-      body: formData, // FormData doesn't need 'Content-Type': 'application/json'
-      credentials: 'include', // Important for sending/receiving session cookies
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const errorMessage = errorData.message || response.statusText || 'Unknown upload error';
-      console.error(`Upload API Error: ${response.status} ${errorMessage}`, errorData);
-      return { success: false, message: errorMessage, error: errorData.error };
-    }
-
-    const data = await response.json();
-    return { success: true, message: data.message || 'Upload successful', data: data };
-  } catch (error: any) {
-    console.error(`Network or unexpected error during upload ${url}:`, error);
-    return { success: false, message: error.message || 'Network error occurred during upload.' };
-  }
-}
-
 
 // --- Authentication Endpoints ---
 
-export const getAuthStatus = async (): Promise<ApiResponse<{ isLoggedIn: boolean; user: UserSession | null; }>> => {
-  return apiFetch('/auth/status', { method: 'GET' });
-};
+export const getAuthStatus = (): Promise<ApiResponse & { isLoggedIn: boolean; user: UserSession | null; }> =>
+  apiFetch('/auth/status');
 
-export const login = async (username: string, password: string): Promise<ApiResponse<{ user: UserSession }>> => {
-  return apiFetch('/auth/login', {
+export const login = (username: string, password: string): Promise<ApiResponse & { user: UserSession }> =>
+  apiFetch('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ username, password }),
   });
-};
 
-export const logout = async (): Promise<ApiResponse<null>> => {
-  return apiFetch('/auth/logout', { method: 'POST' });
-};
+export const logout = (): Promise<ApiResponse> => // Logout has no specific data beyond success/message
+  apiFetch('/auth/logout', { method: 'POST' });
 
-export const register = async (username: string, password: string, confirm_password: string): Promise<ApiResponse<null>> => {
-  return apiFetch('/auth/register', {
+export const register = (username: string, password: string, confirm_password: string): Promise<ApiResponse> =>
+  apiFetch('/auth/register', {
     method: 'POST',
     body: JSON.stringify({ username, password, confirm_password }),
   });
-};
 
 // --- Batch (Lightbox) Management Endpoints ---
 
-export const getBatches = async (): Promise<ApiResponse<{ batches: Batch[] }>> => {
-  return apiFetch('/batches', { method: 'GET' });
-};
+export const getBatches = (): Promise<ApiResponse & { batches: Batch[] }> =>
+  apiFetch('/batches');
 
-export const createBatch = async (name: string): Promise<ApiResponse<{ batch: Batch }>> => {
-  return apiFetch('/batches', {
+export const createBatch = (name: string): Promise<ApiResponse & { batch: Batch }> =>
+  apiFetch('/batches', {
     method: 'POST',
     body: JSON.stringify({ name }),
   });
-};
 
-export const getBatchDetails = async (batchId: string): Promise<ApiResponse<{ batch: Batch }>> => {
-  return apiFetch(`/batches/${batchId}`, { method: 'GET' });
-};
+export const getBatchDetails = (batchId: string): Promise<ApiResponse & { batch: Batch }> =>
+  apiFetch(`/batches/${batchId}`);
 
-export const toggleShareBatch = async (batchId: string): Promise<ApiResponse<{ batch_id: string; is_shared: boolean; share_token?: string; public_share_path?: string; }>> => {
-  return apiFetch(`/batches/${batchId}/toggle_share`, { method: 'POST', body: JSON.stringify({}) }); // Empty body is fine for POST
-};
+export const toggleShareBatch = (batchId: string): Promise<ApiResponse & { is_shared: boolean; share_token: string | null; public_share_url?: string; public_slideshow_url?: string; }> =>
+  apiFetch(`/batches/${batchId}/toggle_share`, { method: 'POST', body: JSON.stringify({}) }); 
 
-export const renameBatch = async (batchId: string, newName: string): Promise<ApiResponse<{ batch_id: string; new_name: string; }>> => {
-  return apiFetch(`/batches/${batchId}/rename`, {
+export const renameBatch = (batchId: string, new_name: string): Promise<ApiResponse & { batch_id: string; new_name: string; }> =>
+  apiFetch(`/batches/${batchId}/rename`, {
     method: 'POST',
-    body: JSON.stringify({ new_name: newName }),
+    body: JSON.stringify({ new_name: new_name }),
   });
+
+export const deleteBatch = (batchId: string): Promise<ApiResponse & { batch_id: string; message: string; }> =>
+  apiFetch(`/batches/${batchId}`, { method: 'DELETE' });
+
+export const exportBatch = (batchId: string): Promise<Response> => { // Returns raw Response object for file download
+    return fetch(constructFullApiUrl(`/batches/${batchId}/export`), { // Use constructFullApiUrl here too
+        method: 'GET',
+        credentials: 'include',
+    });
 };
 
-export const deleteBatch = async (batchId: string): Promise<ApiResponse<{ batch_id: string; message: string; }>> => {
-  return apiFetch(`/batches/${batchId}`, { method: 'DELETE' });
-};
-
-// Note: For download functions, `fetch` will initiate a download, it won't return JSON.
-// You'd typically call these by setting window.location.href or opening a new tab.
-export const downloadMedia = (mediaId: string): void => {
-  const url = `${API_BASE_URL}/media/${mediaId}/download`;
-  window.open(url, '_blank'); // Opens in a new tab, triggering download
-};
-
-// --- Upload Endpoint (complex due to FormData and multiple types) ---
-export type UploadType = 'media' | 'import_zip' | 'blob_storage';
-
-export const uploadFiles = async (
-  files: FileList,
-  uploadType: UploadType = 'media', // default to 'media'
-  existingBatchId?: string,
-  batchName?: string
-): Promise<ApiResponse<{ batch_id: string; batch_name: string; uploaded_items: UploadedItemMeta[] }>> => {
+// --- Media Item Management Endpoints ---
+export const uploadFiles = (
+  files: File[], 
+  uploadType: 'media' | 'import_zip' | 'blob_storage' = 'media', // Changed order of params
+  existingBatchId?: string, 
+  newBatchName?: string, 
+  description: string = ''
+): Promise<ApiResponse & { batch_id: string; batch_name: string; uploaded_items: UploadedItemMeta[] }> => {
   const formData = new FormData();
-  for (let i = 0; i < files.length; i++) {
-    formData.append('files[]', files[i]);
-  }
+  files.forEach(file => {
+    formData.append('files[]', file); 
+  });
   formData.append('upload_type', uploadType);
   if (existingBatchId) {
     formData.append('existing_batch_id', existingBatchId);
   }
-  if (batchName) {
-    formData.append('batch_name', batchName);
+  if (newBatchName) {
+    formData.append('batch_name', newBatchName);
   }
+  formData.append('description', description); 
 
-  // apiUploadFetch handles the method as POST
-  return apiUploadFetch('/upload', formData);
+  return apiFetch('/upload', {
+    method: 'POST',
+    body: formData, 
+  });
 };
 
+export const toggleMediaHidden = (mediaId: string): Promise<ApiResponse & { is_hidden: boolean }> =>
+  apiFetch(`/media/${mediaId}/toggle_hidden`, { method: 'POST' });
+
+export const toggleMediaLiked = (mediaId: string): Promise<ApiResponse & { is_liked: boolean }> =>
+  apiFetch(`/media/${mediaId}/toggle_liked`, { method: 'POST' });
+
+export const deleteMedia = (mediaId: string): Promise<ApiResponse> => // deleteMedia might return no data beyond success/message
+  apiFetch(`/media/${mediaId}`, { method: 'DELETE' });
+
 // --- Public Endpoints (no authentication required) ---
-// Note: These uses 'fetch' directly as they don't need credentials: 'include'
+// Note: These use 'fetch' directly as they don't need credentials: 'include'
 // since they don't rely on Flask sessions for authentication.
 
 async function publicApiFetch<T>(
   endpoint: string,
   options?: RequestInit
-): Promise<ApiResponse<T>> {
-  const url = `${API_BASE_URL}${endpoint}`;
+): Promise<ApiResponse & T> {
+  const url = constructFullApiUrl(endpoint); // Use the new constructor
   try {
     const response = await fetch(url, {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': options?.body instanceof FormData ? undefined : 'application/json',
         ...options?.headers,
       },
     });
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const errorMessage = errorData.message || response.statusText || 'Unknown API error';
-      console.error(`Public API Error: ${response.status} ${errorMessage}`, errorData);
-      return { success: false, message: errorMessage, error: errorData.error };
-    }
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : {}; // data is the raw Flask response JSON
 
-    const data = await response.json();
-    return { success: true, message: data.message || 'Success', data: data };
+    if (!response.ok) {
+      const errorMessage = data.message || response.statusText || 'Unknown API error';
+      console.error(`Public API Error (${response.status}): ${errorMessage}`, data);
+      return { success: false, message: errorMessage, error: data.error || response.statusText } as ApiResponse & T;
+    }
+    return { success: true, ...data } as ApiResponse & T;
   } catch (error: any) {
     console.error(`Network or unexpected error public fetching ${url}:`, error);
-    return { success: false, message: error.message || 'Network error occurred.' };
+    return { success: false, message: error.message || 'Network error occurred.' } as ApiResponse & T;
   }
 }
 
-export const getPublicBatchDetails = async (shareToken: string): Promise<ApiResponse<{ batch: Batch; media_items: MediaItem[] }>> => {
-  return publicApiFetch(`/public/batches/${shareToken}`, { method: 'GET' });
-};
+export const getPublicBatch = (shareToken: string): Promise<ApiResponse & { batch: Batch; media_items: MediaItem[] }> =>
+  publicApiFetch(`/public/batches/${shareToken}`);
 
-export const getPublicSlideshow = async (shareToken: string): Promise<ApiResponse<{ batch: Batch; media_data: { id: string; filepath_segment: string; mimetype: string; original_filename: string; }[]; }>> => {
-  return publicApiFetch(`/public/slideshow/${shareToken}`, { method: 'GET' });
-};
-
-export const publicDownloadMedia = (shareToken: string, mediaId: string): void => {
-  const url = `${API_BASE_URL}/public/media/${shareToken}/${mediaId}/download`;
-  window.open(url, '_blank'); // Opens in a new tab, triggering download
-};
+export const getPublicSlideshow = (shareToken: string): Promise<ApiResponse & { batch: Batch; media_data: MediaItem[] }> => // Corrected media_data type to MediaItem[]
+  publicApiFetch(`/public/slideshow/${shareToken}`);
 
 // --- Admin Endpoints (requires admin privileges) ---
 
-export const getAdminUsers = async (): Promise<ApiResponse<{ users: UserSession[] }>> => {
-  return apiFetch('/admin/users', { method: 'GET' });
-};
+export const getAdminUsers = (): Promise<ApiResponse & { users: UserSession[] }> =>
+  apiFetch('/admin/users');
 
-export const changeUserPassword = async (username: string, newPassword: string): Promise<ApiResponse<null>> => {
-  return apiFetch('/admin/users/change_password', {
+export const changeUserPassword = (username: string, new_password: string): Promise<ApiResponse> =>
+  apiFetch('/admin/users/change_password', {
     method: 'POST',
-    body: JSON.stringify({ username, new_password: newPassword }),
+    body: JSON.stringify({ username, new_password: new_password }),
   });
-};
