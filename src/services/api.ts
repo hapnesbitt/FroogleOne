@@ -13,6 +13,8 @@ export interface UserSession {
   isAdmin: boolean;
 }
 
+export const url_for_api_base = API_BASE_URL; // Export the base URL directly
+
 // Common API response structure
 export interface ApiResponse<T = any> {
   success: boolean;
