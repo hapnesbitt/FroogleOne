@@ -20,7 +20,6 @@ from flask_cors import CORS # Keep CORS for API
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import redis
-from urllib.parse import urlparse as url_parse # Keep for safe redirect validation if any, though less critical for pure API
 from celery import Celery
 from dotenv import load_dotenv
 
@@ -58,7 +57,7 @@ app.config['AUDIO_FORMATS_TO_CONVERT_TO_MP3'] = set(
 if '' in app.config['AUDIO_FORMATS_TO_CONVERT_TO_MP3'] and len(app.config['AUDIO_FORMATS_TO_CONVERT_TO_MP3']) == 1:
     app.config['AUDIO_FORMATS_TO_CONVERT_TO_MP3'] = set()
 
-app.config['VIDEO_MP4_VIDEO_CODEC'] = 'libx64' # Corrected typo, was libx264 but libx64 is more common
+app.config['VIDEO_MP4_VIDEO_CODEC'] = 'libx264' # Corrected typo, was libx264 but libx64 is more common
 app.config['VIDEO_MP4_VIDEO_PRESET'] = os.environ.get('VIDEO_MP4_VIDEO_PRESET', 'veryslow')
 app.config['VIDEO_MP4_VIDEO_CRF'] = os.environ.get('VIDEO_MP4_VIDEO_CRF', '16')
 app.config['VIDEO_MP4_AUDIO_CODEC'] = os.environ.get('VIDEO_MP4_AUDIO_CODEC', 'aac')
@@ -742,7 +741,7 @@ def api_create_batch():
             'is_shared': '0',
             'share_token': ''
         }
-        redis_client.hmset(f'batch:{batch_id}', mapping=batch_data)
+        redis_client.hset(f'batch:{batch_id}', mapping=batch_data)
         redis_client.rpush(f'user:{current_username}:batches', batch_id)
 
         app.logger.info(f"API: POST /batches - User '{current_username}' created new Lightbox '{batch_name}' (ID: {batch_id}).")
@@ -1157,7 +1156,7 @@ def api_upload():
                 else: # Directly store other media types (images, pdfs, etc.)
                     final_path, final_name = get_unique_disk_path(full_disk_dir, sec_base, ext_dot)
                     file_item.save(final_path)
-                    redis_pipe.hmset(f'media:{item_id}', {
+                    redis_pipe.hset(f'media:{item_id}', mapping={ # Add mapping= for clarity with hset
                         **common_data, 
                         'filename_on_disk': final_name,
                         'filepath': os.path.join(disk_path_segment, final_name),
