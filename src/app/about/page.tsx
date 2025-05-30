@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import Image from 'next/image'; 
 import { 
-  Lightbulb, Stars, Sparkles, CirclePlay, Gauge, GraduationCap, // Corrected Magic, Speedometer, Mortarboard
+  Lightbulb, Stars, Sparkles, CirclePlay, Gauge, GraduationCap, // Corrected icon imports
   Github, Rocket, Upload, GalleryVertical, Play, Settings, Film, 
   Waves, Cpu, MemoryStick, Gpu, Bug, Book, Users, MessageSquareText,
   Home, Heart 
@@ -42,28 +42,28 @@ export default function AboutPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="bg-white h-full p-6 rounded-lg shadow-md border border-gray-200 hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300">
               <div className="text-center">
-                <Sparkles className="w-12 h-12 mx-auto mb-3 text-indigo-500" /> {/* Changed to Sparkles */}
+                <Sparkles className="w-12 h-12 mx-auto mb-3 text-indigo-500" /> 
                 <h3 className="text-2xl font-semibold mb-2 text-gray-800">Simplicity First</h3>
                 <p className="text-gray-600">An intuitive interface that makes uploading, organizing, and playing your media a breeze, even for non-technical users.</p>
               </div>
             </div>
             <div className="bg-white h-full p-6 rounded-lg shadow-md border border-gray-200 hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300">
               <div className="text-center">
-                <CirclePlay className="w-12 h-12 mx-auto mb-3 text-green-600" />
+                <CirclePlay className="w-12 h-12 mx-auto mb-3 text-green-600" /> 
                 <h3 className="text-2xl font-semibold mb-2 text-gray-800">Versatile Media Handling</h3>
                 <p className="text-gray-600">Seamlessly handles images, videos (MKV to MP4 conversion), and various audio files (archival M4A transcoding).</p>
               </div>
             </div>
             <div className="bg-white h-full p-6 rounded-lg shadow-md border border-gray-200 hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300">
               <div className="text-center">
-                <Gauge className="w-12 h-12 mx-auto mb-3 text-red-600" /> {/* Changed to Gauge */}
+                <Gauge className="w-12 h-12 mx-auto mb-3 text-red-600" /> 
                 <h3 className="text-2xl font-semibold mb-2 text-gray-800">Optimized Performance</h3>
                 <p className="text-gray-600">Leverages background processing for demanding tasks, ensuring the UI remains snappy and responsive.</p>
               </div>
             </div>
             <div className="bg-white h-full p-6 rounded-lg shadow-md border border-gray-200 hover:shadow-xl transform hover:-translate-y-1 transition-all duration-300">
               <div className="text-center">
-                <GraduationCap className="w-12 h-12 mx-auto mb-3 text-gray-700" /> {/* Changed to GraduationCap */}
+                <GraduationCap className="w-12 h-12 mx-auto mb-3 text-gray-700" /> 
                 <h3 className="text-2xl font-semibold mb-2 text-gray-800">Learn & Explore</h3>
                 <p className="text-gray-600">An excellent example of Flask, Celery, Redis, and FFmpeg in action. Great for learning full-stack development.</p>
               </div>
