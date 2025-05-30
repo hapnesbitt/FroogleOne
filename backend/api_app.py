@@ -982,22 +982,41 @@ def api_delete_batch(batch_id, batch_data):
 @app.route(f'{API_PREFIX}/upload', methods=['POST', 'OPTIONS'])
 @login_required_api
 def api_upload():
-    if request.method == 'OPTIONS': return '', 204 # Handled by CORS
+    # This check handles CORS preflight requests.
+    # For OPTIONS requests, request.files and request.form are empty, so no further processing is needed.
+    if request.method == 'OPTIONS': 
+        return '', 204
     
+    # --- START OF CRUCIAL LOGGING LINES (correctly placed inside the function) ---
+    # These will tell us what Flask sees in the incoming request.
+    app.logger.info(f"API: Upload request received. Content-Type: {request.headers.get('Content-Type')}")
+    app.logger.info(f"API: Request files: {request.files}")
+    app.logger.info(f"API: Request form data: {request.form}")
+    app.logger.info(f"API: 'files[]' in request.files check: {'files[]' in request.files}")
+    # --- END OF CRUCIAL LOGGING LINES ---
+
     if not redis_client:
         return jsonify(success=False, message="Upload service unavailable (DB error)."), 503
     
+    # Check if the 'files[]' part exists in the request files
+    # This is the first check for a 400 Bad Request, often if the frontend doesn't attach files correctly
     if 'files[]' not in request.files:
-        return jsonify(success=False, message="No file part in request."), 400
+        app.logger.warning("API: 'files[]' not found in request.files. Returning 400 (No file part).")
+        return jsonify(success=False, message="No file part in the request or request malformed."), 400
     
+    # Get the list of files associated with 'files[]'
     files = request.files.getlist('files[]')
+    
+    # Check if the list of files is empty or if all files have empty filenames
+    # This is the second check for a 400 Bad Request, common if user submits empty file input
     if not files or all(f.filename == '' for f in files):
+        app.logger.warning("API: Files list is empty or all filenames are empty. Returning 400 (No files selected).")
         return jsonify(success=False, message="No files selected for upload."), 400
 
     current_user = session['username']
     existing_batch_id = request.form.get('existing_batch_id')
-    upload_type = request.form.get('upload_type', 'media') # 'media', 'import_zip', 'blob_storage'
-    description = request.form.get('description', '').strip() # Get description from form data
+    upload_type = request.form.get('upload_type', 'media')
+    description = request.form.get('description', '').strip()
 
     app.logger.info(f"API: Upload by {current_user}. Type: {upload_type}. Files count: {len(files)}")
 
@@ -1019,7 +1038,7 @@ def api_upload():
         except redis.exceptions.RedisError as e:
             app.logger.error(f"API: Redis error checking existing batch {batch_id}: {e}", exc_info=True)
             return jsonify(success=False, message="Database error during batch lookup."), 500
-    else: # Create new batch
+    else: # Create new batch if no existing ID is provided
         new_batch = True
         batch_id = str(uuid.uuid4())
         batch_name_form = request.form.get('batch_name', '').strip()
@@ -1204,7 +1223,6 @@ def api_upload():
             try: shutil.rmtree(full_disk_dir)
             except OSError as e_rmdir: app.logger.error(f"API: Error removing empty new batch dir '{full_disk_dir}': {e_rmdir}")
         return jsonify(success=False, message="No valid files processed or uploaded."), 400
-
 @app.route(f'{API_PREFIX}/media/<uuid:media_id>/toggle_hidden', methods=['POST', 'OPTIONS'])
 @login_required_api
 @owner_or_admin_access_required_api(item_type='media')

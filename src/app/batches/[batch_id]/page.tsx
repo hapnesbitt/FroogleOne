@@ -16,7 +16,7 @@ import {
   ApiResponse, 
   Batch, 
   MediaItem 
-} from '../../../services/api'; // Corrected path
+} from '../../../services/api'; 
 
 export default function BatchDetailsPage() {
   const params = useParams();
@@ -207,22 +207,26 @@ export default function BatchDetailsPage() {
 
   const handleUploadSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    // Corrected check for selectedFiles and ensure it's an array
     if (!selectedFiles || selectedFiles.length === 0) {
       setUploadError("Please select files to upload.");
       return;
     }
+
     setUploading(true);
     setUploadError(null);
     setUploadSuccessMessage(null);
 
-    const filesArray = Array.from(selectedFiles);
+    const filesArray = Array.from(selectedFiles); // Convert FileList to Array<File>
+    
     // Corrected `uploadFiles` signature for new api.ts:
-    // uploadFiles(filesArray, uploadType, existingBatchId, newBatchName, description)
+    // uploadFiles(files: File[], uploadType: UploadType, existingBatchId?: string, newBatchName?: string, description?: string)
     const response = await uploadFiles(filesArray, uploadType, batchId, undefined, fileDescription); 
 
     if (response.success) {
       setUploadSuccessMessage(response.message || 'Files uploaded successfully!');
-      setSelectedFiles(null); 
+      setSelectedFiles(null); // Clear input
+      (e.target as HTMLFormElement).reset(); // Reset file input element
       setFileDescription(''); 
       fetchDetails(); // Re-fetch batch details to show new media items and update counts
     } else {
@@ -300,8 +304,6 @@ export default function BatchDetailsPage() {
       </div>
 
       {/* Play Slideshow (for owner) */}
-      {/* Updated to link to the new authenticated slideshow page */}
-      {/* Added undefined check for playable_media_count, though Flask should always provide it */}
       {batch.playable_media_count !== undefined && batch.playable_media_count > 0 && (
           <div className="bg-white p-6 rounded-lg shadow-md mb-8 border border-gray-200 flex justify-center">
               <Link 

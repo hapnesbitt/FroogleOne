@@ -87,19 +87,40 @@ export interface UploadedItemMeta {
 // T is now the type of the _entire successful response body_ (excluding success/message/error).
 // Example: For getBatchDetails, Flask returns {success: true, batch: Batch}. So T here will be { batch: Batch }.
 // apiFetch will return { success: true, batch: Batch } if successful.
+// /home/www/froogle/src/services/api.ts
+
+// ... (rest of your imports, configuration, and interfaces are the same) ...
+
+// --- API Client Functions ---
+
+// Helper for consistent fetch requests
+// T is now the type of the _entire successful response body_ (excluding success/message/error).
+// Example: For getBatchDetails, Flask returns {success: true, batch: Batch}. So T here will be { batch: Batch }.
+// apiFetch will return { success: true, batch: Batch } if successful.
 async function apiFetch<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<ApiResponse & T> { // ApiResponse & T combines the common ApiResponse fields with the specific T fields
   const url = constructFullApiUrl(endpoint);
+
+  // --- CRUCIAL CHANGE START ---
+  const headers: HeadersInit = {
+    // Spread any custom headers passed in options first
+    ...options?.headers, 
+  };
+
+  // ONLY set 'Content-Type: application/json' if the body is NOT FormData.
+  // If it's FormData, let the browser handle the Content-Type automatically.
+  if (!(options?.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
+  // --- CRUCIAL CHANGE END ---
+
   try {
     const response = await fetch(url, {
       ...options,
       credentials: 'include', // Important for sending/receiving session cookies
-      headers: {
-        'Content-Type': options?.body instanceof FormData ? undefined : 'application/json', // Let FormData set its own Content-Type
-        ...options?.headers,
-      },
+      headers: headers, // Use the dynamically constructed headers object
     });
 
     const text = await response.text();
@@ -118,6 +139,8 @@ async function apiFetch<T>(
     return { success: false, message: error.message || 'Network error occurred.' } as ApiResponse & T;
   }
 }
+
+// ... (rest of your API functions like getAuthStatus, login, uploadFiles etc. are the same) ...
 
 // --- Authentication Endpoints ---
 
