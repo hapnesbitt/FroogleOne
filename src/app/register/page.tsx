@@ -4,7 +4,7 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { register, getAuthStatus, ApiResponse } from '../../../services/api'; // Adjust path as needed
+import { register, getAuthStatus, ApiResponse } from '../../services/api'; // Adjust path as needed
 
 export default function RegisterPage() {
   const [username, setUsername] = useState('');

@@ -1,11 +1,8 @@
-// /home/www/froogle/src/app/slideshow/[share_token]/page.tsx
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react'; // Added useCallback
 import { useParams } from 'next/navigation';
-import { getPublicSlideshow, ApiResponse, Batch, MediaItem } from '../../../../services/api'; 
-
-const IMAGE_DISPLAY_DURATION = 15000; // 15 seconds in milliseconds
+import { getPublicSlideshow, ApiResponse, Batch, MediaItem } from '../../../services/api'; 
 
 export default function PublicSlideshowPage() {
   const params = useParams();
@@ -23,7 +20,7 @@ export default function PublicSlideshowPage() {
   const audioRef = useRef<HTMLAudioElement>(null);
 
   // --- Helper to advance to next media ---
-  const goToNextMedia = useCallback(() => {
+  const goToNextMedia = useCallback(() => { // Wrapped in useCallback
     // Stop all media elements cleanly before advancing
     if (videoRef.current) { 
         videoRef.current.pause(); 
@@ -35,7 +32,7 @@ export default function PublicSlideshowPage() {
     }
     
     setCurrentMediaIndex(prevIndex => (prevIndex + 1) % mediaData.length);
-  }, [mediaData.length]);
+  }, [mediaData.length]); // Dependencies for useCallback
 
   // --- Fetch Slideshow Data ---
   useEffect(() => {
@@ -72,7 +69,7 @@ export default function PublicSlideshowPage() {
     };
 
     fetchSlideshow();
-  }, [shareToken]);
+  }, [shareToken, getPublicSlideshow]); // Added getPublicSlideshow to useEffect dependencies
 
   // --- Unified Playback Control and Auto-Advance Logic ---
   // This effect runs whenever currentMediaIndex changes, or isPlaying state changes.
@@ -87,7 +84,8 @@ export default function PublicSlideshowPage() {
     const currentMedia = mediaData[currentMediaIndex];
     if (!currentMedia) return; 
 
-    let imageTimer: NodeJS.Timeout | null = null;
+    // Removed imageTimer, as it was unused and caused `let` to `const` warnings
+    
     const currentVideoElement = videoRef.current;
     const currentAudioElement = audioRef.current;
 
@@ -99,7 +97,7 @@ export default function PublicSlideshowPage() {
     // --- Cleanup for previous media / before setting up new ---
     // This return function runs when dependencies change or component unmounts
     return () => {
-      if (imageTimer) clearTimeout(imageTimer);
+      // if (imageTimer) clearTimeout(imageTimer); // Removed
       if (currentVideoElement) {
         currentVideoElement.removeEventListener('ended', handleMediaEnded);
         currentVideoElement.pause();
@@ -140,23 +138,24 @@ export default function PublicSlideshowPage() {
 
 
   // --- Play/Pause Button Handler ---
-  const handlePlayPause = () => {
+  const handlePlayPause = useCallback(() => { // Wrapped in useCallback
     setIsPlaying(prev => !prev);
-  };
+  }, []); // No dependencies for this simple toggle
 
   // --- User Controls (Next/Prev) ---
-  const handleNext = () => {
+  const handleNext = useCallback(() => { // Wrapped in useCallback
     setIsPlaying(true); // Assume user wants to play when manually advancing
     goToNextMedia();
-  };
+  }, [goToNextMedia]); // Dependencies for useCallback
 
-  const handlePrev = () => {
+  const handlePrev = useCallback(() => { // Wrapped in useCallback
     setIsPlaying(true); // Assume user wants to play when manually advancing
     // Manually going prev should also reset/pause the current media before moving
     if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; }
     if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; }
     setCurrentMediaIndex(prevIndex => (prevIndex - 1 + mediaData.length) % mediaData.length);
-  };
+  }, [mediaData.length]); // Dependencies for useCallback
+
 
   // --- Keyboard Shortcuts ---
   useEffect(() => {
@@ -249,8 +248,7 @@ export default function PublicSlideshowPage() {
         {/* Fallback for unsupported/non-displayable types or missing URLs */}
         {(!currentMedia?.public_display_url || (!currentMedia?.mimetype?.startsWith('image/') && !currentMedia?.mimetype?.startsWith('video/') && !currentMedia?.mimetype?.startsWith('audio/'))) && (
             <div className="text-center text-gray-400 p-4">
-                <p>Unable to display this media type: {currentMedia?.mimetype || 'unknown'}</p>
-                <p>File: {currentMedia?.original_filename}</p>
+                <p>File type not previewable.</p>
                 {/* You might offer a download link here if public_download_url exists */}
                 {currentMedia?.public_download_url && (
                     <a href={currentMedia.public_download_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline mt-2 inline-block">

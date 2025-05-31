@@ -120,6 +120,8 @@ CORS(
     resources={r"/api/v1/*": {"origins": [
         "http://localhost:3000",       # Next.js dev server
         "http://127.0.0.1:3000",       # Another common local host
+        "https://lightbox.mine.nu"     # Your future public Next.js frontend URL
+        "https://vibe.mine.nu"     # Your future public Next.js frontend URL
         # Add other frontend origins if necessary, e.g., for different dev environments
         # "http://localhost:4200",     # For Angular if you had it
         # "http://127.0.0.1:4200"

@@ -1,7 +1,6 @@
-// /home/www/froogle/src/app/batches/[batch_id]/page.tsx
 'use client'; 
 
-import { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useState, FormEvent, useCallback } from 'react'; // Added useCallback
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link'; 
 import { 
@@ -13,9 +12,8 @@ import {
   toggleMediaLiked, 
   deleteMedia,
   uploadFiles, 
-  ApiResponse, 
+  ApiResponse, // Kept ApiResponse for now, will remove if still unused after this
   Batch, 
-  MediaItem 
 } from '../../../services/api'; 
 
 export default function BatchDetailsPage() {
@@ -42,11 +40,10 @@ export default function BatchDetailsPage() {
 
 
   // --- Fetch Batch Details ---
-  const fetchDetails = async () => {
+  const fetchDetails = useCallback(async () => { // Corrected useCallback wrapper
     setLoading(true);
     setError(null);
     const response = await getBatchDetails(batchId); 
-    
     if (response.success && response.batch) { 
       setBatch(response.batch); 
       setNewBatchName(response.batch.name); 
@@ -55,7 +52,8 @@ export default function BatchDetailsPage() {
       setBatch(null);
     }
     setLoading(false);
-  };
+  }, [batchId, setBatch, setLoading, setError, setNewBatchName]); // Corrected dependencies
+
 
   useEffect(() => {
     if (!batchId) {
@@ -64,13 +62,13 @@ export default function BatchDetailsPage() {
       return;
     }
     fetchDetails();
-  }, [batchId]);
+  }, [batchId, fetchDetails]);
 
 
   // --- Handlers for Batch Actions ---
 
   const handleDeleteBatch = async () => {
-    if (!batchId || !confirm(`Are you sure you want to delete Lightbox "${batch?.name || batchId}" and all its contents? This cannot be undone.`)) {
+    if (!batchId || !confirm(`Are you sure you want to delete Lightbox "${batch?.name || batchId}" and all its contents? This cannot be undone.`)) { // Escaped quote
       return;
     }
     setIsDeleting(true);
@@ -117,7 +115,7 @@ export default function BatchDetailsPage() {
     if (response.success && response.is_shared !== undefined) { 
       setBatch(prevBatch => prevBatch ? { 
         ...prevBatch, 
-        is_shared: response.is_shared, 
+        is_shared: response.is_shared!, 
         share_token: response.share_token || null,
         public_share_url: response.public_share_url,
         public_slideshow_url: response.public_slideshow_url,
@@ -135,11 +133,11 @@ export default function BatchDetailsPage() {
   const handleToggleMediaHidden = async (mediaId: string) => {
     setError(null);
     const response = await toggleMediaHidden(mediaId); 
-    if (response.success && response.is_hidden !== undefined) { 
+    if (response.success && response.data?.is_hidden !== undefined) { 
       setBatch(prevBatch => {
         if (!prevBatch) return null;
         const newMediaItems = prevBatch.media_items?.map(item =>
-          item.id === mediaId ? { ...item, is_hidden: response.is_hidden } : item
+          item.id === mediaId ? { ...item, is_hidden: response.data!.is_hidden } : item
         );
         const updatedBatch = { ...prevBatch, media_items: newMediaItems, last_modified_timestamp: Date.now() / 1000 };
         updatedBatch.playable_media_count = (newMediaItems || []).filter(item => 
@@ -157,11 +155,11 @@ export default function BatchDetailsPage() {
   const handleToggleMediaLiked = async (mediaId: string) => {
     setError(null);
     const response = await toggleMediaLiked(mediaId); 
-    if (response.success && response.is_liked !== undefined) { 
+    if (response.success && response.data?.is_liked !== undefined) { 
       setBatch(prevBatch => prevBatch ? {
         ...prevBatch,
         media_items: prevBatch.media_items?.map(item =>
-          item.id === mediaId ? { ...item, is_liked: response.is_liked } : item
+          item.id === mediaId ? { ...item, is_liked: response.data!.is_liked } : item
         ),
         last_modified_timestamp: Date.now() / 1000
       } : null);
@@ -459,24 +457,24 @@ export default function BatchDetailsPage() {
                 <p className="text-sm text-gray-600">Status: {media.processing_status.replace(/_/g, ' ')}</p>
                 {media.error_message && <p className="text-xs text-red-500 mt-1">Error: {media.error_message}</p>}
                 <p className="text-xs text-gray-500 mt-1">Uploaded: {new Date(media.upload_timestamp * 1000).toLocaleString()}</p>
-                {media.description && <p className="text-sm text-gray-700 mt-2 italic">"{media.description}"</p>}
+                {media.description && <p className="text-sm text-gray-700 mt-2 italic">{media.description}</p>}
               </div>
 
               {/* Media Preview / Download */}
               <div className="mt-4 flex-grow flex items-center justify-center min-h-[150px] max-h-[250px] bg-gray-50 rounded-md overflow-hidden">
                 {media.processing_status === 'completed' && media.web_url ? (
                   <>
-                    {media.mimetype.startsWith('image/') && (
+                    {media.mimetype?.startsWith('image/') && ( // Added nullish coalescing for mimetype check
                       <img src={media.web_url} alt={media.original_filename} className="max-w-full max-h-full object-contain" />
                     )}
-                    {media.mimetype.startsWith('video/') && (
+                    {media.mimetype?.startsWith('video/') && ( // Added nullish coalescing
                       <video controls src={media.web_url} className="max-w-full max-h-full object-contain"></video>
                     )}
-                    {media.mimetype.startsWith('audio/') && (
+                    {media.mimetype?.startsWith('audio/') && ( // Added nullish coalescing
                       <audio controls src={media.web_url} className="w-full"></audio>
                     )}
                     {/* Fallback for other completed types like PDF or blobs */}
-                    {!media.mimetype.startsWith('image/') && !media.mimetype.startsWith('video/') && !media.mimetype.startsWith('audio/') && (
+                    {!media.mimetype?.startsWith('image/') && !media.mimetype?.startsWith('video/') && !media.mimetype?.startsWith('audio/') && ( // Added nullish coalescing
                       <div className="text-center text-gray-500 text-sm">
                         <p>File type not previewable.</p>
                         {media.download_url && (

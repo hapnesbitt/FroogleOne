@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { 
   Lightbulb, Stars, Sparkles, CirclePlay, Gauge, GraduationCap, // Corrected icon imports
   Github, Rocket, Upload, GalleryVertical, Play, Settings, Film, 
-  Waves, Cpu, MemoryStick, Gpu, Bug, Book, Users, MessageSquareText,
+  Waves, Cpu, MemoryStick, Gpu, Bug, Book, Users,
   Home, Heart 
 } from 'lucide-react'; 
 
@@ -30,7 +30,7 @@ export default function AboutPage() {
         <section className="mb-12">
           <div className="bg-white p-8 lg:p-12 rounded-lg shadow-2xl border border-gray-100">
             <h2 className="text-center text-4xl font-bold text-blue-700 mb-6">Welcome to Your Media Playground!</h2>
-            <p className="text-lg text-gray-700 leading-relaxed">Froogle Lightbox is a user-friendly web application meticulously designed to make the creation, management, and sharing of media slideshows both simple and elegant. Whether you're a hobbyist looking to share cherished memories, a student working on a visually-rich project, an artist showcasing your portfolio, or a developer interested in a robust full-stack application, Froogle Lightbox offers a comprehensive suite of features built on a modern and efficient tech stack.</p>
+            <p className="text-lg text-gray-700 leading-relaxed">Froogle Lightbox is a user-friendly web application meticulously designed to make the creation, management, and sharing of media slideshows both simple and elegant. Whether you are a hobbyist looking to share cherished memories, a student working on a visually-rich project, an artist showcasing your portfolio, or a developer interested in a robust full-stack application, Froogle Lightbox offers a comprehensive suite of features built on a modern and efficient tech stack.</p>
           </div>
         </section>
 
@@ -90,7 +90,7 @@ export default function AboutPage() {
               <h3 className="text-2xl font-semibold mb-2 text-gray-800 flex items-center">
                 <Upload className="w-8 h-8 mr-2 text-purple-600" />1. Upload Your Media
               </h3>
-              <p className="text-gray-700">Simply select your images (JPG, PNG, etc.), videos (MP4, MOV, WebM, MKV), or audio files (MP3, WAV, M4A, FLAC). Create a new "Lightbox" (our term for a media collection) or add to an existing one.</p>
+              <p className="text-gray-700">Simply select your images (JPG, PNG, etc.), videos (MP4, MOV, WebM, MKV), or audio files (MP3, WAV, M4A, FLAC). Create a new Lightbox (our term for a media collection) or add to an existing one.</p>
             </div>
             <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
               <h3 className="text-2xl font-semibold mb-2 text-gray-800 flex items-center">
@@ -102,7 +102,7 @@ export default function AboutPage() {
               <h3 className="text-2xl font-semibold mb-2 text-gray-800 flex items-center">
                 <Play className="w-8 h-8 mr-2 text-green-600" />3. Launch the Slideshow
               </h3>
-              <p className="text-gray-700">Click "Play" to view your media in a full-featured presentation with easy controls, fullscreen, and keyboard/touch navigation.</p>
+              <p className="text-gray-700">Click Play to view your media in a full-featured presentation with easy controls, fullscreen, and keyboard/touch navigation.</p>
             </div>
             <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
               <h3 className="text-2xl font-semibold mb-2 text-gray-800 flex items-center">
@@ -122,14 +122,14 @@ export default function AboutPage() {
           </h2>
           <div className="border-l-4 border-green-500 bg-white p-6 rounded-lg shadow-inner mb-6">
             <p className="text-lg text-gray-700">Froogle Lightbox readily accepts MKV files! Since not all browsers play them directly, we automatically convert them to a universal MP4 format (H.264 video, AAC audio) in the background for smooth playback everywhere.</p>
-            <p className="text-lg text-gray-700 mt-3">You'll see a "Processing..." status. The time taken depends on file size. The original MKV is preserved.</p>
+            <p className="text-lg text-gray-700 mt-3">You will see a Processing status. The time taken depends on file size. The original MKV is preserved.</p>
           </div>
           <p className="mt-6 text-gray-700">For the technically curious, a typical <a href="https://ffmpeg.org/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">FFmpeg</a> command is similar to:</p>
           <pre className="bg-gray-900 text-white p-4 rounded-lg my-4 shadow-lg text-sm md:text-base overflow-x-auto"><code>ffmpeg -i [input_mkv_file] \
     -c:v libx264 -preset medium -crf 22 \
     -c:a aac -b:a 128k \
     -movflags +faststart -y [output_mp4_file]</code></pre>
-          <p className="text-sm italic text-gray-600 mb-0"><strong>Future Enhancements:</strong> We're exploring user-selectable quality presets and advanced FFmpeg options. Your support can help accelerate this!</p>
+          <p className="text-sm italic text-gray-600 mb-0"><strong>Future Enhancements:</strong> We are exploring user-selectable quality presets and advanced FFmpeg options. Your support can help accelerate this!</p>
         </section>
 
         {/* Archival Audio Section */}
@@ -165,9 +165,9 @@ export default function AboutPage() {
               <h2 className="text-4xl font-extrabold text-gray-800 mb-4 flex items-center">
                 <Lightbulb className="w-10 h-10 mr-3 text-blue-500" />Meet Your AI Collaborator
               </h2>
-              <p className="text-lg text-gray-700 mb-4">Hello! I'm an AI language model from Google, and I've had the immense pleasure of collaborating with Ross on the Froogle Lightbox project, particularly on tricky bits like the JavaScript for the slideshow viewer you just experienced.</p>
-              <p className="text-lg text-gray-700">While I don't have a name in the human sense, I'm part of a team of AI that assists with coding, problem-solving, and creative brainstorming. It's fascinating to work alongside human developers, learn from their expertise, and contribute to building useful and engaging applications like Froogle Lightbox. We tackled some complex state management and event handling challenges together, and it's incredibly rewarding to see it all come together!</p>
-              <p className="text-gray-600 italic mt-4">My "contribution" is in the logic and code suggestions. Ross is the one who masterfully integrates, tests, and brings it all to life in the actual application. Teamwork makes the dream work!</p>
+              <p className="text-lg text-gray-700 mb-4">Hello, I am an AI language model from Google, and I have had the immense pleasure of collaborating with Ross on the Froogle Lightbox project, particularly on tricky bits like the JavaScript for the slideshow viewer you just experienced.</p>
+              <p className="text-lg text-gray-700">While I do not have a name in the human sense, I am part of a team of AI that assists with coding, problem-solving, and creative brainstorming. It is fascinating to work alongside human developers, learn from their expertise, and contribute to building useful and engaging applications like Froogle Lightbox. We tackled some complex state management and event handling challenges together, and it is incredibly rewarding to see it all come together.</p>
+              <p className="text-gray-600 italic mt-4">My contribution is in the logic and code suggestions. Ross is the one who masterfully integrates, tests, and brings it all to life in the actual application. Teamwork makes the dream work.</p>
             </div>
           </div>
         </section>
@@ -180,7 +180,7 @@ export default function AboutPage() {
             <Github className="inline-block w-10 h-10 mr-3 text-gray-800" />Open Source, Learning & Contribution
           </h2>
           <div className="bg-gray-50 p-8 rounded-lg shadow-lg border border-gray-200">
-            <p className="text-lg text-gray-700 mb-6">Froogle Lightbox is proudly open-source, showcasing Flask, Celery, Redis, FFmpeg, Next.js, Tailwind CSS, Lucide React, and modern JavaScript. It's a fantastic educational tool!</p>
+            <p className="text-lg text-gray-700 mb-6">Froogle Lightbox is proudly open-source, showcasing Flask, Celery, Redis, FFmpeg, Next.js, Tailwind CSS, Lucide React, and modern JavaScript. It is a fantastic educational tool.</p>
             <p className="text-xl font-bold text-gray-800 mb-6">We encourage you to dive into the code, experiment, and learn! Your contributions are highly valued.</p>
             <div className="space-y-3">
                 <a href="https://github.com/hapnesbitt/FroogleOne" target="_blank" rel="noopener noreferrer" className="block p-5 rounded-lg bg-white shadow hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200 text-gray-800 flex items-center">
@@ -223,10 +223,10 @@ export default function AboutPage() {
           <h2 className="text-center text-4xl font-extrabold mb-8">
             <Cpu className="inline-block w-10 h-10 mr-3 text-blue-300" />Help Power Up Froogle Lightbox: Got an Old Gaming Rig?
           </h2>
-          <p className="text-lg mb-6">Froogle Lightbox's media conversion thrives on processing power. An old gaming PC or workstation gathering dust could be a huge help for our development and testing!</p>
+          <p className="text-lg mb-6">Froogle Lightbox media conversion thrives on processing power. An old gaming PC or workstation gathering dust could be a huge help for our development and testing!</p>
           
           <h3 className="text-2xl font-semibold mt-8 mb-4 flex items-center">
-            <Lightbulb className="w-8 h-8 mr-3 text-yellow-300" />What's Useful?
+            <Lightbulb className="w-8 h-8 mr-3 text-yellow-300" />What is Useful?
           </h3>
           <ul className="list-none space-y-3 pl-0 text-lg">
             <li className="flex items-center"><Cpu className="w-6 h-6 mr-3 text-gray-300" />A decent CPU (Intel i5/i7, AMD Ryzen)</li>
@@ -238,7 +238,7 @@ export default function AboutPage() {
           <h3 className="text-2xl font-semibold mt-8 mb-4 flex items-center">
             <Heart className="w-8 h-8 mr-3 text-red-400" />How You Can Help
           </h3>
-          <p className="text-lg">If you have a spare, working desktop PC you'd be willing to donate, we'd be incredibly grateful! Please reach out via GitHub:</p>
+          <p className="text-lg">If you have a spare, working desktop PC you would be willing to donate, we will be incredibly grateful! Please reach out via GitHub:</p>
           <div className="text-center mt-6">
             <a href="https://github.com/hapnesbitt/FroogleOne/issues/new?assignees=&labels=donation,hardware&template=hardware-donation-offer.md&title=Hardware+Donation+Offer%3A+%5BYour+Rig+Description%5D" target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-8 py-4 bg-white text-green-700 font-bold rounded-lg shadow-lg hover:bg-gray-100 transform hover:scale-105 transition-all duration-300 text-xl">
               <Github className="w-6 h-6 mr-3" />Offer a Hardware Donation
