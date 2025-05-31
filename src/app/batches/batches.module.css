@@ -1,0 +1,9 @@
+/* src/app/batches/batches.module.css */
+
+/* Rule for the main page container */
+.batchesContainer {
+  /* Tailwind CSS classes applied via @apply directive */
+  @apply mx-auto p-4 md:p-8 bg-white shadow-lg rounded-lg my-8;
+}
+
+/* Add other styles here as we go */
