@@ -99,14 +99,11 @@ export async function callApi<T>(endpoint: string, method: string = 'GET', data?
 }
 
 export async function register(username: string, password: string, confirmPassword: string): Promise<ApiResponse> {
-  return callApi('/api/v1/register', 'POST', { username, password, confirm_password: confirmPassword });
+  return callApi('/api/v1/auth/register', 'POST', { username, password, confirm_password: confirmPassword });
 }
 
 export async function login(username: string, password: string): Promise<ApiResponse> {
-  const response = await callApi('/api/v1/login', 'POST', { username, password });
-  if (response.success && response.token) {
-    localStorage.setItem('token', response.token);
-  }
+  const response = await callApi('/api/v1/auth/login', 'POST', { username, password });
   return response;
 }
 
@@ -116,13 +113,8 @@ export async function logout(): Promise<ApiResponse> {
 }
 
 export async function getAuthStatus(): Promise<ApiResponse> {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    return { success: true, isLoggedIn: false };
-  }
-  // Optionally, you can call a /verify_token endpoint on your backend
-  // to validate the token's freshness/validity before returning true.
-  return { success: true, isLoggedIn: true };
+  const response = await callApi('/api/v1/auth/status', 'GET');
+  return response;
 }
 
 export async function getBatches(): Promise<ApiResponse<{ batches: Batch[] }>> {

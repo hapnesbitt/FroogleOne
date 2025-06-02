@@ -1,3 +1,4 @@
+// /home/www/froogle/src/app/batches/page.tsx
 'use client';
 
 import { useEffect, useState, FormEvent, useCallback } from 'react';
@@ -8,93 +9,115 @@ import {
   createBatch,
   Batch,
   getAuthStatus,
-  login,
+  login, // Keep login imported for this page's form
   logout
 } from '../../services/api';
 
-export default function HomePage() {
+export default function BatchesHomePage() { // Renamed from HomePage for clarity on its role
   const [batches, setBatches] = useState<Batch[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Covers initial auth check AND batch fetching
   const [error, setError] = useState<string | null>(null);
   const [newBatchName, setNewBatchName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const router = useRouter();
 
+  // Authentication specific states for this page
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null); // null: checking, false: not logged in, true: logged in
 
-  // --- Fetch Batches (Moved to useCallback) ---
+  // --- Fetch Batches (Wrapped in useCallback) ---
   const fetchBatches = useCallback(async () => {
-    if (isLoggedIn) { // Only fetch if logged in
-      setLoading(true);
-      setError(null);
-      const response = await getBatches();
-      if (response.success && response.batches) {
-        setBatches(response.batches);
-      } else {
-        setError(response.message || 'Failed to load Lightboxes.');
-      }
-      setLoading(false);
+    if (!isLoggedIn) { // Ensure this only runs if actually logged in
+      setLoading(false); // Stop loading if not logged in, no batches to fetch
+      return;
     }
-  }, [isLoggedIn, setBatches, setLoading, setError, getBatches]); // Added getBatches to dependencies
 
-  // --- Auth Status Check ---
+    setLoading(true); // Set loading for fetching batches
+    setError(null);
+    const response = await getBatches();
+    if (response.success && response.batches) {
+      setBatches(response.batches);
+    } else {
+      setError(response.message || 'Failed to load Lightboxes.');
+      // If fetching fails due to auth, likely the token expired/invalid. Force logout.
+      if (response.message?.toLowerCase().includes('authentication') || response.message?.toLowerCase().includes('unauthorized')) {
+        console.warn("Authentication likely failed during batch fetch. Logging out.");
+        handleLogout(); // Trigger logout to clear token and display login form
+      }
+    }
+    setLoading(false); // Done loading batches
+  }, [isLoggedIn, setBatches, setLoading, setError, getBatches]); // Dependencies for useCallback
+
+  // --- Auth Status Check (Wrapped in useCallback) ---
   const checkAuthStatus = useCallback(async () => {
     try {
       const response = await getAuthStatus();
       if (response.success && response.isLoggedIn) {
         setIsLoggedIn(true);
         // If logged in, fetch batches immediately
-        fetchBatches(); // No need to await here
+        fetchBatches();
       } else {
-        setIsLoggedIn(false);
-        setLoading(false); // Stop loading if not logged in
+        setIsLoggedIn(false); // Not logged in, this will cause the login form to render
+        setLoading(false); // Stop initial loading, as we're showing the login form
       }
     } catch (err) {
       console.error("Failed to check auth status:", err);
-      setIsLoggedIn(false);
-      setLoading(false);
+      setIsLoggedIn(false); // Assume not logged in on network/server error
+      setLoading(false); // Stop initial loading
     }
-  }, [fetchBatches, getAuthStatus, setLoading]); // Added setIsLoadingLoggedIn, setLoading
+  }, [fetchBatches, getAuthStatus, setLoading, setIsLoggedIn]);
 
   useEffect(() => {
     checkAuthStatus();
-  }, [checkAuthStatus]);
+  }, [checkAuthStatus]); // Run once on mount
 
   // --- Login Handler ---
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setLoginLoading(true);
     setLoginError(null);
-    const response = await login(username, password);
+    const response = await login(username, password); // This calls your services/api.ts login
+
     if (response.success) {
-      setIsLoggedIn(true);
-      alert(response.message || 'Login successful!');
-      router.push('/batches'); // Redirect to batches page after login
+      // <--- THIS IS THE CRITICAL ADDITION / CHANGE --->
+      if (response.token) { // Ensure the backend sends a 'token' field
+        localStorage.setItem('token', response.token); // <<< SAVE THE TOKEN HERE!
+      } else {
+        console.warn("Login successful but no token received from API. Check backend response for 'token' field.");
+        setLoginError('Login successful, but session could not be established. Please try again.');
+        setLoginLoading(false);
+        return; // Stop here if no token is received
+      }
+      // <--- END CRITICAL ADDITION / CHANGE --->
+
+      setIsLoggedIn(true); // Update state to trigger re-render and show batches
+      alert(response.message || 'Login successful!'); // Consider replacing this alert for better UX
+      // No router.push('/batches') needed here, as the user is already on /batches
+      // and setIsLoggedIn(true) will trigger the display of batch content.
     } else {
       setLoginError(response.message || 'Login failed.');
+      localStorage.removeItem('token'); // Clear any stale token if login fails
     }
     setLoginLoading(false);
   };
 
   // --- Logout Handler ---
   const handleLogout = async () => {
-    const response = await logout();
+    const response = await logout(); // This service function already removes the token from localStorage
     if (response.success) {
       setIsLoggedIn(false);
       setUsername('');
       setPassword('');
       setBatches([]); // Clear batches on logout
-      alert(response.message || 'Logged out successfully!');
-      router.push('/'); // Stay on homepage, which will now show login form
+      alert(response.message || 'Logged out successfully!'); // Consider replacing alert
+      // No explicit push needed if current path is /batches; the `!isLoggedIn` condition will render the login form.
     } else {
-      setLoginError(response.message || 'Logout failed.');
+      setLoginError(response.message || 'Logout failed.'); // Use loginError for logout errors too
     }
   };
-
 
   // --- Create Batch Handler ---
   const handleCreateBatch = async (e: FormEvent) => {
@@ -107,9 +130,9 @@ export default function HomePage() {
     setError(null);
     const response = await createBatch(newBatchName.trim());
     if (response.success && response.batch) {
-      setBatches(prevBatches => [response.batch!, ...prevBatches]); // Added '!'
+      setBatches(prevBatches => [response.batch!, ...prevBatches]);
       setNewBatchName('');
-      alert(response.message || 'Lightbox created successfully!');
+      alert(response.message || 'Lightbox created successfully!'); // Consider replacing alert
       router.push(`/batches/${response.batch.id}`); // Redirect to new batch details
     } else {
       setError(response.message || 'Failed to create Lightbox.');
@@ -118,14 +141,16 @@ export default function HomePage() {
   };
 
   // --- Render Logic ---
-  if (isLoggedIn === null) {
+  // Show loading while checking auth status OR while logged in and fetching batches
+  if (isLoggedIn === null || (isLoggedIn && loading)) {
     return (
       <div className="p-8 text-center text-xl font-semibold text-gray-700">
-        <p>Checking authentication status...</p>
+        <p>{isLoggedIn === null ? "Checking authentication status..." : "Loading Lightboxes..."}</p>
       </div>
     );
   }
 
+  // If NOT logged in, show the login form
   if (!isLoggedIn) {
     return (
       <div className="flex items-center justify-center min-h-screen-centered bg-gray-100 p-4">
@@ -180,7 +205,7 @@ export default function HomePage() {
           </form>
 
           <p className="text-center text-gray-600 text-sm mt-6">
-            Do not have an account?{' '} {/* Corrected: Escaped quote */}
+            Do not have an account?{' '}
             <Link href="/register" className="font-semibold text-blue-600 hover:text-blue-800">
               Register here
             </Link>
@@ -190,15 +215,15 @@ export default function HomePage() {
     );
   }
 
-  // If logged in, show the main dashboard content
+  // If logged in (isLoggedIn is true), show the main dashboard content
   return (
     <div className="container mx-auto p-4 md:p-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b pb-4 border-gray-300">
         <h1 className="text-3xl font-extrabold text-gray-900 mb-2">Welcome!</h1>
         <button
           onClick={handleLogout}
-          className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
-          disabled={loginLoading} // Use loginLoading to prevent multiple logout clicks
+          className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition-colors"
+          disabled={loginLoading} // Use loginLoading to prevent multiple logout clicks while a login is active
         >
           Logout
         </button>
@@ -229,7 +254,7 @@ export default function HomePage() {
 
       {/* Batches List */}
       <h2 className="text-xl font-semibold text-gray-800 mb-4">Your Lightboxes ({batches.length})</h2>
-      {loading ? (
+      {loading ? ( // This `loading` state now specifically refers to batch fetching if `isLoggedIn` is true
         <div className="p-8 text-center text-xl font-semibold text-gray-700">
           <p>Loading Lightboxes...</p>
         </div>
